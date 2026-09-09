@@ -1,0 +1,101 @@
+name: CI
+
+# Formula/clocwork.rb is written by the release workflow in
+# wojciechpolak/clocwork, so what arrives here has never been installed by
+# anyone. This installs it.
+#
+# A formula can be valid Ruby, pass audit, and still produce a virtualenv that
+# cannot import clocwork, which prints a version perfectly well and then fails
+# on the first real run. So the gate is an install on both platforms, followed
+# by counting something.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Style and audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Set up Homebrew and this tap
+        id: tap
+        uses: Homebrew/actions/setup-homebrew@8f3d1ec8a696b3b9d9a6c3696b6c73033cab69e4 # 2026.08.14.1
+
+      - name: Formula style
+        run: brew style "${{ steps.tap.outputs.tap-name }}/clocwork"
+
+      - name: Formula audit
+        run: brew audit --strict --formula "${{ steps.tap.outputs.tap-name }}/clocwork"
+
+  install:
+    name: Install (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - name: Set up Homebrew and this tap
+        id: tap
+        uses: Homebrew/actions/setup-homebrew@8f3d1ec8a696b3b9d9a6c3696b6c73033cab69e4 # 2026.08.14.1
+
+      # No bottles are published for this tap. This is the path a user takes.
+      - name: Install
+        env:
+          FORMULA: ${{ steps.tap.outputs.tap-name }}/clocwork
+        run: brew install --formula "$FORMULA"
+
+      # `clocwork --version` prints the version compiled into the wheel the
+      # formula downloaded. When it matches, the formula, the tag, the wheel
+      # and the command on PATH are all one number.
+      - name: The installed command reports the formula version
+        env:
+          FORMULA: ${{ steps.tap.outputs.tap-name }}/clocwork
+        run: |
+          set -euo pipefail
+          expected="$(brew info --json=v2 --formula "$FORMULA" \
+            | jq -r '.formulae[0].versions.stable')"
+          actual="$(clocwork --version)"
+          if [ "clocwork $expected" != "$actual" ]; then
+            echo "the formula installs $expected but the command reports $actual" >&2
+            exit 1
+          fi
+          echo "$actual"
+
+      # clocwork shells out to cloc for every count, so a completed install has
+      # to have put it on PATH.
+      - name: cloc came with it
+        run: command -v cloc
+
+      - name: Count something
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/count"
+          mkdir -p "$work/src"
+          printf "print('hi')\n" > "$work/src/hello.py"
+          cat > "$work/projects.toml" <<'TOML'
+          [defaults]
+          root = "."
+          vcs = "none"
+
+          [[project]]
+          repo = "src"
+          name = "Sample"
+          TOML
+          clocwork --quiet --config "$work/projects.toml" --out "$work/out"
+          test -f "$work/out/cw-report.txt"
+          test -f "$work/out/cw-card-languages.svg"
+          grep -F Python "$work/out/cw-report.txt"
+
+      - name: Formula test block
+        env:
+          FORMULA: ${{ steps.tap.outputs.tap-name }}/clocwork
+        run: brew test "$FORMULA"
