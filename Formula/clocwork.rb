@@ -10,8 +10,8 @@ class Clocwork < Formula
 
   desc "Aggregate cloc line counts across several projects into one report"
   homepage "https://github.com/wojciechpolak/clocwork"
-  url "https://github.com/wojciechpolak/clocwork/releases/download/v0.9.0/clocwork-0.9.0-py3-none-any.whl", using: :nounzip
-  sha256 "a6c5ecea08c306d737f4401094aa2d50a3a5052de087988fbfd94a6b25f616b4"
+  url "https://github.com/wojciechpolak/clocwork/releases/download/v0.9.1/clocwork-0.9.1-py3-none-any.whl", using: :nounzip
+  sha256 "3fd4a1bf684473a7f82ae4b8be18ac20df3ba2661deacf61a406e87e070d36e0"
   license "GPL-3.0-or-later"
 
   depends_on "cloc"
